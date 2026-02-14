@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IP2 成績ダッシュボード</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-card: #1e293b;
+  --bg-card-hover: #273548;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #3b82f6;
+  --accent-light: #60a5fa;
+  --accent-dark: #2563eb;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --border: #334155;
+  --shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+  --radius: 12px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Header */
+header {
+  background: linear-gradient(135deg, var(--accent-dark), #7c3aed);
+  padding: 32px;
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+  text-align: center;
+}
+header h1 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+header p {
+  color: rgba(255,255,255,0.8);
+  font-size: 0.95rem;
+}
+
+/* Upload Zone */
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: var(--bg-secondary);
+  margin-bottom: 24px;
+}
+.upload-zone:hover, .upload-zone.dragover {
+  border-color: var(--accent);
+  background: rgba(59,130,246,0.05);
+}
+.upload-zone svg {
+  width: 48px; height: 48px;
+  margin-bottom: 12px;
+  color: var(--text-muted);
+}
+.upload-zone h3 { color: var(--text-secondary); margin-bottom: 4px; }
+.upload-zone p { color: var(--text-muted); font-size: 0.85rem; }
+.upload-zone input { display: none; }
+
+/* Dashboard (hidden until data loaded) */
+#dashboard { display: none; }
+
+/* Summary Cards */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 20px;
+  border: 1px solid var(--border);
+  transition: background 0.2s;
+}
+.card:hover { background: var(--bg-card-hover); }
+.card .label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.card .value {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+.card .sub {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.card .value.accent { color: var(--accent-light); }
+.card .value.success { color: var(--success); }
+.card .value.warning { color: var(--warning); }
+.card .value.danger { color: var(--danger); }
+
+/* Section */
+.section {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.section h2 {
+  font-size: 1.1rem;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section h2 .icon { font-size: 1.2rem; }
+
+/* Chart Grid */
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 24px;
+  margin-bottom: 24px;
+}
+@media (max-width: 900px) {
+  .chart-grid { grid-template-columns: 1fr; }
+}
+.chart-box {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 20px;
+}
+.chart-box h3 {
+  font-size: 0.95rem;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+}
+.chart-box canvas {
+  max-height: 320px;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.stat-item {
+  background: var(--bg-primary);
+  border-radius: 8px;
+  padding: 16px;
+}
+.stat-item h4 {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 0.9rem;
+}
+.stat-row .stat-label { color: var(--text-secondary); }
+.stat-row .stat-value { font-weight: 600; }
+
+/* Table */
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+thead th {
+  background: var(--bg-primary);
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  border-bottom: 2px solid var(--border);
+  position: sticky;
+  top: 0;
+}
+thead th:hover { color: var(--accent-light); }
+thead th .sort-icon { margin-left: 4px; font-size: 0.7rem; }
+tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+tbody tr:hover { background: rgba(59,130,246,0.05); }
+
+/* Grade badge */
+.grade {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.grade-S { background: rgba(59,130,246,0.2); color: var(--accent-light); }
+.grade-A { background: rgba(34,197,94,0.2); color: var(--success); }
+.grade-B { background: rgba(245,158,11,0.2); color: var(--warning); }
+.grade-C { background: rgba(251,146,60,0.2); color: #fb923c; }
+.grade-F { background: rgba(239,68,68,0.2); color: var(--danger); }
+
+/* Bar indicator */
+.bar-bg {
+  width: 100px;
+  height: 6px;
+  background: var(--bg-primary);
+  border-radius: 3px;
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 8px;
+}
+.bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+/* Footer */
+footer {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .container { padding: 12px; }
+  header { padding: 20px; }
+  header h1 { font-size: 1.3rem; }
+  .cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .card { padding: 14px; }
+  .card .value { font-size: 1.3rem; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>IP2 成績ダッシュボード</h1>
+    <p>Innovation Practice 2 - 成績概要と統計</p>
+  </header>
+
+  <!-- Upload Zone -->
+  <div class="upload-zone" id="uploadZone">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+    </svg>
+    <h3>CSVファイルをドラッグ＆ドロップ</h3>
+    <p>または、クリックしてファイルを選択（「成績まとめ」CSVを使用）</p>
+    <input type="file" id="fileInput" accept=".csv">
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard">
+    <!-- Summary Cards -->
+    <div class="cards" id="summaryCards"></div>
+
+    <!-- Charts -->
+    <div class="chart-grid">
+      <div class="chart-box">
+        <h3>得点分布</h3>
+        <canvas id="histogramChart"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>評価軸バランス（全体平均）</h3>
+        <canvas id="radarChart"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>Day別 平均得点推移</h3>
+        <canvas id="lineChart"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>成績ランク分布</h3>
+        <canvas id="pieChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="section">
+      <h2><span class="icon">📊</span> 統計情報</h2>
+      <div class="stats-grid" id="statsGrid"></div>
+    </div>
+
+    <!-- Table -->
+    <div class="section">
+      <h2><span class="icon">📋</span> 成績一覧（匿名）</h2>
+      <div class="table-wrapper">
+        <table id="gradeTable">
+          <thead><tr id="tableHead"></tr></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p>IP2 成績ダッシュボード &copy; 2025 - データは匿名表示されています</p>
+  </footer>
+</div>
+
+<script>
+// ============================================================
+// CSV Parser
+// ============================================================
+function parseCSV(text) {
+  const rows = [];
+  let current = '';
+  let inQuotes = false;
+  let row = [];
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"' && text[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        current += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        row.push(current.trim());
+        current = '';
+      } else if (ch === '\n' || (ch === '\r' && text[i + 1] === '\n')) {
+        row.push(current.trim());
+        current = '';
+        rows.push(row);
+        row = [];
+        if (ch === '\r') i++;
+      } else {
+        current += ch;
+      }
+    }
+  }
+  if (current || row.length) {
+    row.push(current.trim());
+    rows.push(row);
+  }
+  return rows;
+}
+
+// ============================================================
+// Data Processing
+// ============================================================
+function processData(rows) {
+  // ヘッダー行: row[0] = 日付, row[1] = 詳細ヘッダー(row index 1-3)
+  // データ行: 4行目以降（0-indexed）
+  // 満点行: 列0が空で列4に572のような値
+
+  const students = [];
+  const maxRow = rows.length;
+
+  // Day合計の列インデックスを特定
+  // Day1: 列5 (Day1小テスト 20点)
+  // Day2合計: 列13 (80点)
+  // Day3合計: 列18 (80点) - Day3合計80点
+  // Day4合計: 列25 (80点)
+  // Day5合計: 列30 (Day5合計?) - ない、列34が合計
+  // Day5合計: 列34 (45点)
+  // Day6: 列35 (5点)
+
+  // 重要列（0-indexed）:
+  // 0: メール/学籍番号
+  // 1: 氏名
+  // 2: 回答率
+  // 3: 得点率
+  // 4: 合計（素点）
+  // 5: Day1小テスト（20点）
+  // 6: 実習の理解度（20点） - これはDay1の課題
+  // 7-12: Day2個別項目
+  // 12: DAY2小計55点 (実際のCSVでは列11がリスクテイカー、列12がDAY2小計)
+  // 13: Day2事業計画書提出（25点）
+  // 14: Day2合計（80点）- 但しこのCSVではDay3のデータがこの辺...
+
+  // CSVの実際の列マッピング（先頭行をカウント）:
+  // ヘッダー2行目から:
+  // col0: (空) → メールアドレス
+  // col1: (空) → 氏名
+  // col2: 回答率
+  // col3: 得点率
+  // col4: 合計
+  // col5: Day1小テスト（20点）
+  // col6: 実習の理解度(20点)... → これはDay2の列? いいえ、日付ヘッダーをみると col5のみ10/6
+  // 日付ヘッダー: col5=10/6, col14=10/27, col20=11/17, col21-26=12/1, col27-32=12/15, col33-34=1/5, col35=1/26, col36-37=2/5
+  // col36: テスト（82点満点）
+  // col37: ビジネス企画書
+  // col38: 最終テスト配分 0.4
+  // col39: 事業プラン配分 0.4
+  // col40: 合計
+  // col41: 得点率配分 0.2
+  // col42: 合計点数
+  // col43: 点数
+
+  // 学籍番号パターン: 数字2桁+英字2桁+数字4桁 (例: 22im0057, 24IM0012)
+  // メールパターン: 上記@i-u.ac.jp
+  const idPattern = /^\d{2}[a-zA-Z]{2}\d{4}/;
+
+  for (let i = 0; i < maxRow; i++) {
+    const row = rows[i];
+    if (!row || row.length < 43) continue;
+
+    const email = (row[0] || '').trim();
+
+    // データ行の判定: 学籍番号またはメールアドレスのパターンに一致する行のみ
+    if (!idPattern.test(email)) continue;
+
+    const num = (v) => {
+      if (!v || v === '' || v === '#DIV/0!') return 0;
+      const s = v.replace('%', '').replace(/,/g, '');
+      const n = parseFloat(s);
+      return isNaN(n) ? 0 : n;
+    };
+
+    const pct = (v) => {
+      if (!v || v === '') return 0;
+      const s = v.replace('%', '');
+      const n = parseFloat(s);
+      return isNaN(n) ? 0 : n;
+    };
+
+    // Day別得点 (列インデックスはデータ行のカンマ区切りから検証済)
+    // col5: Day1小テスト(20点), col6: 実習理解度(20点) → Day1は小テストのみ
+    // col14: Day2合計(80点)
+    // col20: Day3合計(80点)
+    // col26: Day4前半合計(80点) (12/1)
+    // col32: Day4後半合計(80点) (12/15) → ヘッダー: "Day4合計80点満点"
+    // col35: Day5合計(45点)
+    // col36: Day6(5点)
+    // col37: テスト(82点満点)
+    // col38: ビジネス企画書(100点満点)
+    const day1Quiz = num(row[5]);            // Day1小テスト（20点）
+    const day2Total = num(row[14]);          // Day2合計（80点）
+    const day3Total = num(row[20]);          // Day3合計80点
+    const day4aTotal = num(row[26]);         // Day4前半合計80点 (12/1)
+    const day4bTotal = num(row[32]);         // Day4後半合計80点 (12/15)
+    const day5Total = num(row[35]);          // Day5合計45点
+    const day6 = num(row[36]);               // Day6（5点）
+
+    const finalExam = num(row[37]);          // テスト（82点満点）
+    const businessPlan = num(row[38]);       // ビジネス企画書（100点満点）
+
+    const finalExamWeighted = num(row[39]);  // 最終テスト配分 ×0.4
+    const planWeighted = num(row[40]);       // 事業プラン配分 ×0.4
+    const combinedWeighted = num(row[41]);   // 合計（テスト+プラン）
+    const quizWeighted = num(row[42]);       // 得点率配分 ×0.2
+    const totalScore = num(row[43]);         // 合計点数
+    const finalGrade = num(row[44]);         // 点数（四捨五入）
+
+    const responseRate = pct(row[2]);
+    const scoreRate = pct(row[3]);
+    const rawTotal = num(row[4]);
+
+    students.push({
+      id: email.replace('@i-u.ac.jp', '').toUpperCase(),
+      responseRate,
+      scoreRate,
+      rawTotal,
+      day1Quiz,
+      day2Total,
+      day3Total,
+      day4aTotal,
+      day4bTotal,
+      day5Total,
+      day6,
+      finalExam,
+      businessPlan,
+      finalExamWeighted,
+      planWeighted,
+      quizWeighted,
+      totalScore,
+      finalGrade
+    });
+  }
+
+  return students;
+}
+
+// ============================================================
+// Statistics helpers
+// ============================================================
+function mean(arr) {
+  if (!arr.length) return 0;
+  return arr.reduce((a, b) => a + b, 0) / arr.length;
+}
+function median(arr) {
+  if (!arr.length) return 0;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+function stddev(arr) {
+  if (arr.length < 2) return 0;
+  const m = mean(arr);
+  return Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length);
+}
+function getGrade(score) {
+  if (score >= 90) return 'S';
+  if (score >= 80) return 'A';
+  if (score >= 70) return 'B';
+  if (score >= 60) return 'C';
+  return 'F';
+}
+
+// ============================================================
+// Render Dashboard
+// ============================================================
+let chartInstances = [];
+
+function destroyCharts() {
+  chartInstances.forEach(c => c.destroy());
+  chartInstances = [];
+}
+
+function renderDashboard(students) {
+  destroyCharts();
+  document.getElementById('dashboard').style.display = 'block';
+
+  // Filter out students with 0 total (likely inactive)
+  const active = students.filter(s => s.totalScore > 0);
+  const scores = active.map(s => s.totalScore);
+  const grades = active.map(s => s.finalGrade || s.totalScore);
+
+  // ---- Summary Cards ----
+  const cardsHTML = `
+    <div class="card">
+      <div class="label">登録人数</div>
+      <div class="value accent">${students.length}</div>
+      <div class="sub">有効: ${active.length}名</div>
+    </div>
+    <div class="card">
+      <div class="label">平均点</div>
+      <div class="value">${mean(scores).toFixed(1)}</div>
+      <div class="sub">100点満点換算</div>
+    </div>
+    <div class="card">
+      <div class="label">中央値</div>
+      <div class="value success">${median(scores).toFixed(1)}</div>
+    </div>
+    <div class="card">
+      <div class="label">最高点</div>
+      <div class="value accent">${Math.max(...scores).toFixed(1)}</div>
+    </div>
+    <div class="card">
+      <div class="label">最低点</div>
+      <div class="value danger">${Math.min(...scores).toFixed(1)}</div>
+    </div>
+    <div class="card">
+      <div class="label">標準偏差</div>
+      <div class="value warning">${stddev(scores).toFixed(1)}</div>
+    </div>
+  `;
+  document.getElementById('summaryCards').innerHTML = cardsHTML;
+
+  // ---- Histogram ----
+  const bins = Array(10).fill(0);
+  const binLabels = ['0-9', '10-19', '20-29', '30-39', '40-49', '50-59', '60-69', '70-79', '80-89', '90-100'];
+  scores.forEach(s => {
+    const idx = Math.min(Math.floor(s / 10), 9);
+    bins[idx]++;
+  });
+
+  const histCtx = document.getElementById('histogramChart').getContext('2d');
+  chartInstances.push(new Chart(histCtx, {
+    type: 'bar',
+    data: {
+      labels: binLabels,
+      datasets: [{
+        label: '人数',
+        data: bins,
+        backgroundColor: bins.map((_, i) => {
+          if (i >= 9) return 'rgba(59,130,246,0.8)';
+          if (i >= 8) return 'rgba(34,197,94,0.8)';
+          if (i >= 7) return 'rgba(245,158,11,0.8)';
+          if (i >= 6) return 'rgba(251,146,60,0.8)';
+          return 'rgba(239,68,68,0.8)';
+        }),
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => `${ctx.raw}名` } }
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1, color: '#94a3b8' }, grid: { color: '#334155' } },
+        x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
+      }
+    }
+  }));
+
+  // ---- Radar Chart ----
+  const quizScores = active.map(s => s.quizWeighted);
+  const examScores = active.map(s => s.finalExamWeighted);
+  const planScores = active.map(s => s.planWeighted);
+
+  // Normalize to percentage of max possible
+  // 小テスト配分: max 20 (0.2 of 100)
+  // 期末テスト配分: max ~32.8 (82 * 0.4)
+  // 事業プラン配分: max 40 (100 * 0.4)
+  const quizMax = 20;
+  const examMax = 32.8;
+  const planMax = 40;
+
+  const radarCtx = document.getElementById('radarChart').getContext('2d');
+  chartInstances.push(new Chart(radarCtx, {
+    type: 'radar',
+    data: {
+      labels: ['小テスト (40%)', '期末テスト (40%)', 'レポート (20%)'],
+      datasets: [{
+        label: '全体平均（%）',
+        data: [
+          (mean(quizScores) / quizMax * 100).toFixed(1),
+          (mean(examScores) / examMax * 100).toFixed(1),
+          (mean(planScores) / planMax * 100).toFixed(1)
+        ],
+        backgroundColor: 'rgba(59,130,246,0.2)',
+        borderColor: 'rgba(59,130,246,0.8)',
+        pointBackgroundColor: 'rgba(59,130,246,1)',
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        r: {
+          beginAtZero: true,
+          max: 100,
+          ticks: { color: '#94a3b8', backdropColor: 'transparent' },
+          grid: { color: '#334155' },
+          pointLabels: { color: '#f1f5f9', font: { size: 13 } }
+        }
+      },
+      plugins: { legend: { labels: { color: '#94a3b8' } } }
+    }
+  }));
+
+  // ---- Line Chart: Day average ----
+  const dayLabels = ['Day1', 'Day2', 'Day3', 'Day4a', 'Day4b', 'Day5', 'Day6'];
+  const dayMaxes = [20, 80, 80, 80, 80, 45, 5];
+  const dayFields = ['day1Quiz', 'day2Total', 'day3Total', 'day4aTotal', 'day4bTotal', 'day5Total', 'day6'];
+
+  const dayAvgs = dayFields.map((field, i) => {
+    const vals = active.map(s => s[field]).filter(v => v > 0);
+    if (!vals.length) return 0;
+    return (mean(vals) / dayMaxes[i] * 100);
+  });
+
+  const lineCtx = document.getElementById('lineChart').getContext('2d');
+  chartInstances.push(new Chart(lineCtx, {
+    type: 'line',
+    data: {
+      labels: dayLabels,
+      datasets: [{
+        label: '平均得点率（%）',
+        data: dayAvgs.map(v => v.toFixed(1)),
+        borderColor: 'rgba(59,130,246,0.9)',
+        backgroundColor: 'rgba(59,130,246,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 6,
+        pointBackgroundColor: '#3b82f6',
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true, max: 100, ticks: { color: '#94a3b8', callback: v => v + '%' }, grid: { color: '#334155' } },
+        x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
+      },
+      plugins: { legend: { labels: { color: '#94a3b8' } } }
+    }
+  }));
+
+  // ---- Pie Chart: Grade Distribution ----
+  const gradeCount = { S: 0, A: 0, B: 0, C: 0, F: 0 };
+  scores.forEach(s => gradeCount[getGrade(s)]++);
+
+  const pieCtx = document.getElementById('pieChart').getContext('2d');
+  chartInstances.push(new Chart(pieCtx, {
+    type: 'doughnut',
+    data: {
+      labels: ['S (90+)', 'A (80-89)', 'B (70-79)', 'C (60-69)', 'F (<60)'],
+      datasets: [{
+        data: [gradeCount.S, gradeCount.A, gradeCount.B, gradeCount.C, gradeCount.F],
+        backgroundColor: [
+          'rgba(59,130,246,0.8)',
+          'rgba(34,197,94,0.8)',
+          'rgba(245,158,11,0.8)',
+          'rgba(251,146,60,0.8)',
+          'rgba(239,68,68,0.8)'
+        ],
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: '55%',
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 16, usePointStyle: true } },
+        tooltip: { callbacks: { label: ctx => `${ctx.label}: ${ctx.raw}名 (${(ctx.raw/active.length*100).toFixed(0)}%)` } }
+      }
+    }
+  }));
+
+  // ---- Stats Grid ----
+  const statsData = [
+    { title: '小テスト配分 (20点満点)', values: quizScores },
+    { title: '期末テスト配分 (32.8点満点)', values: examScores },
+    { title: 'レポート配分 (40点満点)', values: planScores },
+    { title: '合計点 (100点満点)', values: scores }
+  ];
+
+  let statsHTML = '';
+  statsData.forEach(stat => {
+    const vals = stat.values.filter(v => v > 0);
+    statsHTML += `
+      <div class="stat-item">
+        <h4>${stat.title}</h4>
+        <div class="stat-row"><span class="stat-label">平均</span><span class="stat-value">${mean(vals).toFixed(1)}</span></div>
+        <div class="stat-row"><span class="stat-label">中央値</span><span class="stat-value">${median(vals).toFixed(1)}</span></div>
+        <div class="stat-row"><span class="stat-label">標準偏差</span><span class="stat-value">${stddev(vals).toFixed(1)}</span></div>
+        <div class="stat-row"><span class="stat-label">最高</span><span class="stat-value">${vals.length ? Math.max(...vals).toFixed(1) : '-'}</span></div>
+        <div class="stat-row"><span class="stat-label">最低</span><span class="stat-value">${vals.length ? Math.min(...vals).toFixed(1) : '-'}</span></div>
+      </div>
+    `;
+  });
+  document.getElementById('statsGrid').innerHTML = statsHTML;
+
+  // ---- Table ----
+  renderTable(active);
+}
+
+// ============================================================
+// Sortable Table
+// ============================================================
+let currentSort = { col: 'totalScore', dir: 'desc' };
+let tableData = [];
+
+function renderTable(students) {
+  tableData = students;
+
+  const columns = [
+    { key: 'index', label: '#' },
+    { key: 'quizWeighted', label: '小テスト (20)' },
+    { key: 'finalExamWeighted', label: '期末テスト (32.8)' },
+    { key: 'planWeighted', label: 'レポート (40)' },
+    { key: 'totalScore', label: '合計点' },
+    { key: 'grade', label: 'ランク' }
+  ];
+
+  // Header
+  const headHTML = columns.map(col => {
+    const arrow = currentSort.col === col.key
+      ? (currentSort.dir === 'asc' ? ' ▲' : ' ▼')
+      : '';
+    return `<th data-col="${col.key}">${col.label}<span class="sort-icon">${arrow}</span></th>`;
+  }).join('');
+  document.getElementById('tableHead').innerHTML = headHTML;
+
+  // Sort
+  const sorted = [...students].sort((a, b) => {
+    let va, vb;
+    if (currentSort.col === 'grade') {
+      va = a.totalScore; vb = b.totalScore;
+    } else if (currentSort.col === 'index') {
+      return 0; // keep original order
+    } else {
+      va = a[currentSort.col]; vb = b[currentSort.col];
+    }
+    return currentSort.dir === 'asc' ? va - vb : vb - va;
+  });
+
+  // Body
+  const bodyHTML = sorted.map((s, i) => {
+    const grade = getGrade(s.totalScore);
+    const pct = Math.min(s.totalScore, 100);
+    const barColor = grade === 'S' ? '#3b82f6' : grade === 'A' ? '#22c55e' : grade === 'B' ? '#f59e0b' : grade === 'C' ? '#fb923c' : '#ef4444';
+
+    return `<tr>
+      <td>${i + 1}</td>
+      <td>${s.quizWeighted.toFixed(1)}</td>
+      <td>${s.finalExamWeighted.toFixed(1)}</td>
+      <td>${s.planWeighted.toFixed(1)}</td>
+      <td>
+        ${s.totalScore.toFixed(1)}
+        <span class="bar-bg"><span class="bar-fill" style="width:${pct}%;background:${barColor}"></span></span>
+      </td>
+      <td><span class="grade grade-${grade}">${grade}</span></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('tableBody').innerHTML = bodyHTML;
+
+  // Click handlers
+  document.querySelectorAll('#tableHead th').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (col === 'index') return;
+      if (currentSort.col === col) {
+        currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSort.col = col;
+        currentSort.dir = 'desc';
+      }
+      renderTable(tableData);
+    });
+  });
+}
+
+// ============================================================
+// File Upload Handling
+// ============================================================
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+
+uploadZone.addEventListener('click', () => fileInput.click());
+
+uploadZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  uploadZone.classList.add('dragover');
+});
+uploadZone.addEventListener('dragleave', () => {
+  uploadZone.classList.remove('dragover');
+});
+uploadZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) handleFile(file);
+});
+
+function handleFile(file) {
+  if (!file.name.endsWith('.csv')) {
+    alert('CSVファイルを選択してください。');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    const rows = parseCSV(text);
+    const students = processData(rows);
+
+    if (students.length === 0) {
+      alert('有効な学生データが見つかりませんでした。「成績まとめ」CSVを使用してください。');
+      return;
+    }
+
+    uploadZone.style.display = 'none';
+    renderDashboard(students);
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+</script>
+</body>
+</html>
